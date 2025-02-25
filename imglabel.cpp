@@ -12,19 +12,16 @@ ImgLabel::ImgLabel(QWidget *parent):QLabel(parent)
 
 void ImgLabel::paintEvent(QPaintEvent *)
 {
+
     if (!this->pixmap() || this->pixmap()->isNull()) {
         return; // 添加空指针检查
     }
     QPainter painter(this);
     QPixmap originalPixmap = *this->pixmap();
+
     double scaledWidth = originalPixmap.width() * m_scaleValue;
     double scaledHeight = originalPixmap.height() * m_scaleValue;
-    // 缩放图片（保持宽高比）
-    // QPixmap scaledPixmap = originalPixmap.scaled(
-    //     scaledWidth, scaledHeight,
-    //     Qt::KeepAspectRatio, Qt::SmoothTransformation
-    //     );
-    QPixmap scaledPixmap = this->pixmap()->scaled(scaledWidth, scaledHeight,
+    QPixmap scaledPixmap = originalPixmap.scaled(scaledWidth, scaledHeight,
                                                  Qt::IgnoreAspectRatio,
                                                  Qt::SmoothTransformation);
 
