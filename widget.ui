@@ -20,7 +20,7 @@
    <enum>Qt::NoFocus</enum>
   </property>
   <property name="windowTitle">
-   <string>raw图查看</string>
+   <string>图片工具</string>
   </property>
   <property name="windowIcon">
    <iconset resource="res.qrc">
@@ -69,6 +69,9 @@
       </property>
       <property name="cursor">
        <cursorShape>SizeAllCursor</cursorShape>
+      </property>
+      <property name="focusPolicy">
+       <enum>Qt::NoFocus</enum>
       </property>
       <property name="styleSheet">
        <string notr="true">background-color: rgb(234, 255, 231);</string>
@@ -390,52 +393,7 @@
        <string>OpenCV</string>
       </property>
       <layout class="QGridLayout" name="gridLayout">
-       <item row="2" column="0">
-        <widget class="QPushButton" name="pushButton_circle">
-         <property name="maximumSize">
-          <size>
-           <width>90</width>
-           <height>16777215</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>圆点检测</string>
-         </property>
-        </widget>
-       </item>
-       <item row="2" column="1">
-        <widget class="QPushButton" name="pushButton_2">
-         <property name="maximumSize">
-          <size>
-           <width>90</width>
-           <height>16777215</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>PushButton</string>
-         </property>
-        </widget>
-       </item>
        <item row="1" column="0">
-        <widget class="QPushButton" name="pushButton_opencv_gray">
-         <property name="minimumSize">
-          <size>
-           <width>0</width>
-           <height>0</height>
-          </size>
-         </property>
-         <property name="maximumSize">
-          <size>
-           <width>90</width>
-           <height>16777215</height>
-          </size>
-         </property>
-         <property name="text">
-          <string>CV_高斯模糊</string>
-         </property>
-        </widget>
-       </item>
-       <item row="1" column="1">
         <widget class="QPushButton" name="pushButton_opencv">
          <property name="minimumSize">
           <size>
@@ -450,7 +408,65 @@
           </size>
          </property>
          <property name="text">
-          <string>CV_GRBG图</string>
+          <string>原图</string>
+         </property>
+        </widget>
+       </item>
+       <item row="1" column="1">
+        <widget class="QPushButton" name="pushButton_opencv_gray">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>0</height>
+          </size>
+         </property>
+         <property name="maximumSize">
+          <size>
+           <width>90</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>高斯模糊</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="1">
+        <widget class="QPushButton" name="pushButton_canny">
+         <property name="maximumSize">
+          <size>
+           <width>90</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>边缘检测</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="0">
+        <widget class="QPushButton" name="pushButton_gray">
+         <property name="maximumSize">
+          <size>
+           <width>90</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>灰度图</string>
+         </property>
+        </widget>
+       </item>
+       <item row="3" column="1">
+        <widget class="QPushButton" name="pushButton_circle">
+         <property name="maximumSize">
+          <size>
+           <width>90</width>
+           <height>16777215</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>圆点检测</string>
          </property>
         </widget>
        </item>
@@ -472,7 +488,7 @@
           </size>
          </property>
          <property name="text">
-          <string>QT灰度8</string>
+          <string>原图</string>
          </property>
         </widget>
        </item>
@@ -491,7 +507,7 @@
           </size>
          </property>
          <property name="text">
-          <string>QT灰度16</string>
+          <string>暂无</string>
          </property>
         </widget>
        </item>

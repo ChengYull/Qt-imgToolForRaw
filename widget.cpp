@@ -12,6 +12,8 @@ Widget::Widget(QWidget *parent)
     ui->pushButton_opencv->setDisabled(true);
     ui->pushButton_opencv_gray->setDisabled(true);
     ui->pushButton_circle->setDisabled(true);
+    ui->pushButton_canny->setDisabled(true);
+    ui->pushButton_gray->setDisabled(true);
     ui->pushButton_labelImg_gray16->setDisabled(true);
     ui->pushButton_labelImg_gray8->setDisabled(true);
     ui->lineEdit->setDisabled(true);
@@ -35,12 +37,15 @@ void Widget::on_pushButton_chooseImg_clicked()
         qDebug() << "用户取消选择";
         return;
     }
+    // 重选图片后执行初始化操作
+    init();
     filePath = path;
     ui->lineEdit->setText(filePath);
     QFileInfo fileInfo(filePath);
     QString fileName = fileInfo.fileName();
+    imgType = fileInfo.suffix();
     qDebug() << fileName << fileInfo.suffix();
-    if("raw" == fileInfo.suffix()){
+    if("raw" == imgType){
         QSize size = parseImageSize(fileName);
         if(size.isEmpty()){
             QMessageBox::warning(nullptr, "文件大小不匹配", "图片尺寸与文件大小不匹配");
@@ -81,19 +86,10 @@ void Widget::on_pushButton_chooseImg_clicked()
         file.close();
         // 获取cv的mat包括灰度图与GRBG图
         getCVMatGRBG();
-        getCVMatGray();
-        // 获取qImg 8位与16位
+
+        // 获取qImg
         getQImage();
-        getQImageGray16();
-        ui->label->clear();
-        ui->label->setPixmap(QPixmap::fromImage(qImg));
-        circles.clear();
-        // 启用按钮
-        ui->pushButton_opencv->setDisabled(false);
-        ui->pushButton_opencv_gray->setDisabled(false);
-        ui->pushButton_circle->setDisabled(false);
-        ui->pushButton_labelImg_gray16->setDisabled(false);
-        ui->pushButton_labelImg_gray8->setDisabled(false);
+
     } else{
         qImg = QImage(filePath);
         width = qImg.width();
@@ -102,11 +98,22 @@ void Widget::on_pushButton_chooseImg_clicked()
         ui->lineEdit_width->setText(QString::number(width));
         ui->lineEdit_height->setText(QString::number(height));
         // TODO: 转为cvMat执行cv操作
-        // 显示
-        ui->label->setPixmap(QPixmap::fromImage(qImg));
+        img_mat_root = qImageToCVMat(qImg);
     }
+    // 显示
+    ui->label->setPixmap(QPixmap::fromImage(qImg));
+    // 高斯模糊
+    getCVMatGaussian();
+    circles.clear();
 
-
+    // 启用按钮
+    ui->pushButton_opencv->setDisabled(false);
+    ui->pushButton_opencv_gray->setDisabled(false);
+    ui->pushButton_circle->setDisabled(false);
+    ui->pushButton_canny->setDisabled(false);
+    ui->pushButton_gray->setDisabled(false);
+    ui->pushButton_labelImg_gray16->setDisabled(false);
+    ui->pushButton_labelImg_gray8->setDisabled(false);
 }
 
 
@@ -142,32 +149,41 @@ void Widget::getCVMatGRBG()
     cv::Mat display_image;
     double scale_factor = 255.0 / 65535.0; // 16bit转8bit
     color_image.convertTo(display_image, CV_8UC3, scale_factor);
-    img_mat_grbg = display_image;
+    img_mat_root = display_image;
 }
 
-void Widget::getCVMatGray()
+void Widget::getCVMatGaussian()
 {
-    //归一化到0-255范围以便显示 OpenCV默认显示8位
-    cv::Mat grayImage(height, width, CV_16UC1);
+    if("raw" == imgType){
+        //归一化到0-255范围以便显示 OpenCV默认显示8位
+        cv::Mat grayImage(height, width, CV_16UC1);
 
-    for(int j = 0; j < height; j++){
-        for(int i = 0; i < width; i++){
-            // unpacked raw10 右移两位
-            quint16 pixel = rawData[i + j * width];
-            // 为每个像素赋值
-            grayImage.at<quint16>(j, i) = pixel;
+        for(int j = 0; j < height; j++){
+            for(int i = 0; i < width; i++){
+                // unpacked raw10 右移两位
+                quint16 pixel = rawData[i + j * width];
+                // 为每个像素赋值
+                grayImage.at<quint16>(j, i) = pixel;
+            }
         }
-    }
-    // 归一化到0-255范围以便显示（OpenCV默认显示8位）
-    cv::Mat displayImage;
-    double scale = 255.0 / 1023.0;  // 10位范围是0~1023
-    /* convertTo()是 OpenCV 中用于 数据类型转换和数值范围缩放 的关键操作。
+        // 归一化到0-255范围以便显示（OpenCV默认显示8位）
+        cv::Mat displayImage;
+        double scale = 255.0 / 1023.0;  // 10位范围是0~1023
+        /* convertTo()是 OpenCV 中用于 数据类型转换和数值范围缩放 的关键操作。
      * 它的作用是将原始的高位深灰度图像（例如 10 位或 16 位）转换为 8 位图像，以便用 imshow 正确显示。
     */
-    grayImage.convertTo(displayImage, CV_8UC1, scale);
-    img_mat_gray = displayImage;
+        grayImage.convertTo(displayImage, CV_8UC1, scale);
+
+        img_mat_gray = displayImage;
+    }else{
+        if(img_mat_root.type() == CV_8UC1)
+            img_mat_gray = img_mat_root.clone();
+
+        else
+            cv::cvtColor(img_mat_root, img_mat_gray, cv::COLOR_BGRA2GRAY);
+    }
     // 降噪（高斯模糊）
-    cv::GaussianBlur(img_mat_gray, img_mat_gray, cv::Size(9, 9), 2, 2);
+    cv::GaussianBlur(img_mat_root, img_mat_gaussian, cv::Size(5, 5), 2, 2);
 }
 
 void Widget::getQImage()
@@ -189,28 +205,10 @@ void Widget::getQImage()
     qImg = image;
 }
 
-void Widget::getQImageGray16()
-{
-    QImage image(width, height, QImage::Format_Grayscale16);
-
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            // QImage::Format_Grayscale16的范围是0~65535
-            // 需要对像素值进行缩放映射到对应范围中
-            quint16 pixel = rawData[y * width + x] << 6;
-            // 设置像素值
-            // 使用 qRgb 函数将灰度值转换为 QRgb 类型
-            QRgb gray = qRgb(pixel, pixel, pixel);
-            image.setPixel(x, y, gray);
-        }
-    }
-    qImg_gray16 = image;
-}
-
 void Widget::on_pushButton_opencv_clicked()
 {
     // 显示图片
-    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(img_mat_grbg)));
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(img_mat_root)));
     // 显示图像
     //cv::namedWindow("RAW Image", cv::WINDOW_NORMAL);
     //cv::imshow("RAW Image", img_mat_grbg);
@@ -221,7 +219,7 @@ void Widget::on_pushButton_labelImg_gray16_clicked()
 {
 
     // 显示图片
-    ui->label->setPixmap(QPixmap::fromImage(qImg_gray16));
+    //ui->label->setPixmap(QPixmap::fromImage(qImg_gray16));
 }
 
 
@@ -241,7 +239,7 @@ void Widget::on_pushButton_clear_clicked()
 void Widget::on_pushButton_opencv_gray_clicked()
 {
 
-    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(img_mat_gray)));
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(img_mat_gaussian)));
     //cv::namedWindow("RAW gray Image", cv::WINDOW_NORMAL);
     //cv::imshow("RAW gray Image", img_mat_gray);
 }
@@ -283,21 +281,71 @@ QImage Widget::cvMatToQImage(const cv::Mat &mat){
     }
 }
 
+cv::Mat Widget::qImageToCVMat(const QImage &qImage)
+{
+    qDebug() << "format : " << qImage.format();
+    QImage image = qImage;
+
+    // 根据QImage格式进行转换
+    switch (image.format()) {
+    case QImage::Format_ARGB32:
+    case QImage::Format_RGB32:
+    case QImage::Format_ARGB32_Premultiplied:
+        // 处理32位格式（包含Alpha通道）
+        image = image.convertToFormat(QImage::Format_ARGB32);
+        break;
+    case QImage::Format_RGB888:
+        // 直接处理24位RGB格式
+        break;
+    case QImage::Format_Indexed8:
+    case QImage::Format_Grayscale8:
+        // 处理8位灰度图
+        image = image.convertToFormat(QImage::Format_Grayscale8);
+        break;
+    default:
+        // 其他格式转换为32位ARGB
+        image = image.convertToFormat(QImage::Format_ARGB32);
+    }
+
+    // 创建对应类型的cv::Mat
+    cv::Mat mat;
+    const int channels = image.isGrayscale() ? 1 : (image.hasAlphaChannel() ? 4 : 3);
+
+    if (image.format() == QImage::Format_RGB888) {
+        // 处理24位RGB888格式
+        mat = cv::Mat(image.height(), image.width(), CV_8UC3, (void*)image.constBits(), image.bytesPerLine());
+        cv::cvtColor(mat, mat, cv::COLOR_RGB2BGR); // 转换RGB到BGR
+    } else if (channels == 4) {
+        // 处理32位带Alpha的图像
+        mat = cv::Mat(image.height(), image.width(), CV_8UC4, (void*)image.constBits(), image.bytesPerLine());
+        cv::cvtColor(mat, mat, cv::COLOR_BGRA2BGR); // 转换BGRA到BGR并去除Alpha
+    } else if (channels == 1) {
+        // 处理8位灰度图
+        mat = cv::Mat(image.height(), image.width(), CV_8UC1, (void*)image.constBits(), image.bytesPerLine());
+    }
+
+    // 确保返回的Mat数据连续且独立
+    return mat.clone();
+}
+
 void Widget::on_pushButton_circle_clicked()
 {
 
     // 只需要执行一次
     if(circles.empty()){
         // 绘制圆形的mat
-        img_mat_circle = img_mat_grbg.clone();
+        img_mat_circle = img_mat_root.clone();
+        // 高斯处理灰度图
+        cv::Mat gaussion_gray;
+        cv::GaussianBlur(img_mat_gray, gaussion_gray, cv::Size(5, 5), 2, 2);
 
         // 霍夫圆检测
         cv::HoughCircles(
-            img_mat_gray,           // 输入灰度图像
+            gaussion_gray,           // 输入灰度图像
             circles,        // 输出结果（x, y, radius）
             cv::HOUGH_GRADIENT, // 检测方法（目前仅支持梯度法）
             1,              // 累加器分辨率（与图像尺寸的倒数，通常为1）
-            img_mat_gray.rows/8,    // 圆之间的最小距离（避免重复检测）
+            gaussion_gray.rows/64,    // 圆之间的最小距离（避免重复检测）
             200,            // Canny边缘检测的高阈值
             100,            // 累加器阈值（越小检测越多假圆）
             0,              // 最小圆半径（0表示不限制）
@@ -305,6 +353,7 @@ void Widget::on_pushButton_circle_clicked()
 
         if(circles.empty()){
             QMessageBox::warning(nullptr, "不存在圆点", "未找到圆点，请检查图片");
+            img_mat_circle = cv::Mat();
             return;
         }
         // 更新圆点顺序(逆时针排序)
@@ -376,6 +425,25 @@ void Widget::sortCirclePoint(){
     });
 }
 
+void Widget::init()
+{
+    filePath = "";
+    width = 0;
+    height = 0;
+    img_mat_root = cv::Mat();
+    img_mat_gray = cv::Mat();
+    img_mat_gaussian = cv::Mat();
+    img_mat_circle = cv::Mat();
+    img_mat_canny = cv::Mat();
+    qImg = QImage();
+
+    rawData.clear();
+    circles.clear();
+    imgType = "";
+
+    ui->label->clear();
+}
+
 void Widget::setCircleInfo()
 {
     ui->lineEdit_circle1_x->setText(QString::number(circles[0][0]));
@@ -431,6 +499,20 @@ void Widget::cvLine(cv::Point pt1, cv::Point pt2, double &distance){
 
 void Widget::on_pushButton_reset_clicked()
 {
+    ui->label->resetPos(QPoint(0, 0));
+}
 
+
+void Widget::on_pushButton_canny_clicked()
+{
+
+    cv::Canny(img_mat_gaussian, img_mat_canny, 100, 200); // 使用相同阈值
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(img_mat_canny)));
+}
+
+
+void Widget::on_pushButton_gray_clicked()
+{
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(img_mat_gray)));
 }
 
