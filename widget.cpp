@@ -9,16 +9,30 @@ Widget::Widget(QWidget *parent)
 {
     ui->setupUi(this);
     this->setLayout(ui->mainLayout);
+
+    QString title = "图片工具" + version;
+    this->setWindowTitle(title);
+
     ui->pushButton_opencv->setDisabled(true);
     ui->pushButton_opencv_gray->setDisabled(true);
     ui->pushButton_circle->setDisabled(true);
     ui->pushButton_canny->setDisabled(true);
     ui->pushButton_gray->setDisabled(true);
-    ui->pushButton_labelImg_gray16->setDisabled(true);
+    ui->pushButton_save->setDisabled(true);
     ui->pushButton_labelImg_gray8->setDisabled(true);
+    ui->pushButton_threshold->setDisabled(true);
     ui->lineEdit->setDisabled(true);
     ui->lineEdit_width->setDisabled(true);
     ui->lineEdit_height->setDisabled(true);
+
+    ui->spinBox_brightness->setDisabled(true);
+    ui->doubleSpinBox_contrast->setDisabled(true);
+    ui->horizontalSlider_brightness->setDisabled(true);
+    ui->horizontalSlider_contrast->setDisabled(true);
+    ui->doubleSpinBox_contrast->setValue(1.0);
+    ui->doubleSpinBox_contrast->setSingleStep(0.01);
+    ui->horizontalSlider_contrast->setValue(10);
+    ui->horizontalSlider_contrast->setMaximum(20);
 }
 
 Widget::~Widget()
@@ -112,8 +126,14 @@ void Widget::on_pushButton_chooseImg_clicked()
     ui->pushButton_circle->setDisabled(false);
     ui->pushButton_canny->setDisabled(false);
     ui->pushButton_gray->setDisabled(false);
-    ui->pushButton_labelImg_gray16->setDisabled(false);
+    ui->pushButton_save->setDisabled(false);
+    ui->pushButton_threshold->setDisabled(false);
     ui->pushButton_labelImg_gray8->setDisabled(false);
+
+    ui->spinBox_brightness->setDisabled(false);
+    ui->doubleSpinBox_contrast->setDisabled(false);
+    ui->horizontalSlider_brightness->setDisabled(false);
+    ui->horizontalSlider_contrast->setDisabled(false);
 }
 
 
@@ -150,6 +170,7 @@ void Widget::getCVMatGRBG()
     double scale_factor = 255.0 / 65535.0; // 16bit转8bit
     color_image.convertTo(display_image, CV_8UC3, scale_factor);
     img_mat_root = display_image;
+
 }
 
 void Widget::getCVMatGaussian()
@@ -212,14 +233,6 @@ void Widget::on_pushButton_opencv_clicked()
     // 显示图像
     //cv::namedWindow("RAW Image", cv::WINDOW_NORMAL);
     //cv::imshow("RAW Image", img_mat_grbg);
-}
-
-
-void Widget::on_pushButton_labelImg_gray16_clicked()
-{
-
-    // 显示图片
-    //ui->label->setPixmap(QPixmap::fromImage(qImg_gray16));
 }
 
 
@@ -427,6 +440,7 @@ void Widget::sortCirclePoint(){
 
 void Widget::init()
 {
+    savePath = "";
     filePath = "";
     width = 0;
     height = 0;
@@ -514,5 +528,79 @@ void Widget::on_pushButton_canny_clicked()
 void Widget::on_pushButton_gray_clicked()
 {
     ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(img_mat_gray)));
+}
+
+
+void Widget::on_pushButton_save_clicked()
+{
+    savePath = "";
+    savePath = QFileDialog::getSaveFileName(this,
+                                              "请选择保存位置",
+                                              "undifined.png",
+                                              "Image Files (*.jpg;*.png);");
+    if(savePath.isEmpty()) return;
+    ui->label->pixmap()->save(savePath);
+}
+
+
+void Widget::on_pushButton_threshold_clicked()
+{
+    threshType = (threshType + 1) % 2;
+    cv::Mat thresh_Mat;
+    int t_type = 0;
+    if(threshType){
+        // 二进制二值化
+        t_type = cv::THRESH_BINARY;
+        ui->pushButton_threshold->setText("反二值化");
+    }
+    else{
+        // 二进制反二值化
+        t_type = cv::THRESH_BINARY_INV;
+        ui->pushButton_threshold->setText("二值化");
+    }
+    // cv::threshold(输入图像, 输出图像, 阈值, 最大值, 阈值类型)
+    // 输入图像必须单通道，最大值通常设置为255
+    cv::threshold(img_mat_gray, thresh_Mat, 100, 255, t_type);
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(thresh_Mat)));
+}
+/* 亮度对比度调节 */
+void Widget::changeGain(double contrast, int brightness)
+{
+    cv::Mat changedGainMat;
+    // 计算公式是 对比度 * 像素值 + 亮度
+    img_mat_root.convertTo(changedGainMat, -1, contrast, brightness);
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(changedGainMat)));
+}
+
+void Widget::on_spinBox_brightness_valueChanged(int bri)
+{
+    ui->horizontalSlider_brightness->setSliderPosition(bri);
+    double c = ui->doubleSpinBox_contrast->value();
+    changeGain(c, bri);
+}
+
+
+void Widget::on_horizontalSlider_brightness_valueChanged(int value)
+{
+    ui->spinBox_brightness->setValue(value);
+    double c = ui->doubleSpinBox_contrast->value();
+    changeGain(c, value);
+}
+
+
+void Widget::on_doubleSpinBox_contrast_valueChanged(double con)
+{
+    ui->horizontalSlider_contrast->setSliderPosition(con * 10);
+    int b = ui->spinBox_brightness->value();
+    changeGain(con, b);
+}
+
+
+void Widget::on_horizontalSlider_contrast_valueChanged(int value)
+{
+    double con = static_cast<double>(value) / 10;
+    ui->doubleSpinBox_contrast->setValue(con);
+    int b = ui->spinBox_brightness->value();
+    changeGain(con, b);
 }
 
