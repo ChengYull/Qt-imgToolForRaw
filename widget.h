@@ -18,7 +18,7 @@ class Widget : public QWidget
 
 public:
 
-    QString version = "v1.0.3";
+    QString version = "v1.0.4";
 
     Widget(QWidget *parent = nullptr);
     ~Widget();
@@ -64,6 +64,20 @@ private slots:
 
     void on_horizontalSlider_contrast_valueChanged(int value);
 
+    void on_pushButton_nearest_clicked();
+
+    void on_pushButton_linear_clicked();
+
+    void on_pushButton_pyramid_clicked();
+
+    void on_pushButton_choose_blend_img_clicked();
+
+    void on_pushButton_blend_clicked();
+
+    void on_pushButton_rotate_clicked();
+
+    void on_pushButton_flip_clicked();
+
 private:
     Ui::Widget *ui;
     QString filePath;
@@ -80,5 +94,6 @@ private:
     std::vector<cv::Vec3f> circles;
     QString imgType;
     int threshType = 0;
+    QImage blendImg;
 };
 #endif // WIDGET_H

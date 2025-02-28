@@ -25,14 +25,39 @@ Widget::Widget(QWidget *parent)
     ui->lineEdit_width->setDisabled(true);
     ui->lineEdit_height->setDisabled(true);
 
+    // 亮度对比度
     ui->spinBox_brightness->setDisabled(true);
     ui->doubleSpinBox_contrast->setDisabled(true);
     ui->horizontalSlider_brightness->setDisabled(true);
     ui->horizontalSlider_contrast->setDisabled(true);
+    ui->spinBox_brightness->setMaximum(100);
+    ui->spinBox_brightness->setMinimum(0);
+    ui->doubleSpinBox_contrast->setMaximum(2.0);
+    ui->doubleSpinBox_contrast->setMinimum(0);
     ui->doubleSpinBox_contrast->setValue(1.0);
     ui->doubleSpinBox_contrast->setSingleStep(0.01);
     ui->horizontalSlider_contrast->setValue(10);
     ui->horizontalSlider_contrast->setMaximum(20);
+
+    // 分辨率缩放
+    ui->doubleSpinBox_resize->setValue(1);
+    ui->doubleSpinBox_resize->setMaximum(5.0);
+    ui->doubleSpinBox_resize->setMinimum(0.25);
+    ui->doubleSpinBox_resize->setSingleStep(0.25);
+    ui->doubleSpinBox_resize->setDisabled(true);
+    ui->pushButton_nearest->setDisabled(true);
+    ui->pushButton_linear->setDisabled(true);
+    ui->pushButton_pyramid->setDisabled(true);
+    // 图片融合
+    ui->doubleSpinBox_blend_alpha->setValue(0.5);
+    ui->doubleSpinBox_blend_alpha->setMaximum(1);
+    ui->doubleSpinBox_blend_alpha->setSingleStep(0.05);
+    ui->doubleSpinBox_blend_alpha->setDisabled(true);
+    ui->spinBox_blend_gain->setDisabled(true);
+    ui->pushButton_choose_blend_img->setDisabled(true);
+    ui->pushButton_blend->setDisabled(true);
+
+
 }
 
 Widget::~Widget()
@@ -44,7 +69,7 @@ Widget::~Widget()
 void Widget::on_pushButton_chooseImg_clicked()
 {
     QString path = QFileDialog::getOpenFileName(this,
-                                            "请选择raw图",
+                                            "请选择图片",
                                             "",
                                             "Images (*.raw;*.png;*.jpg);");
     if(path.isEmpty()){
@@ -108,10 +133,12 @@ void Widget::on_pushButton_chooseImg_clicked()
         qImg = QImage(filePath);
         width = qImg.width();
         height = qImg.height();
-        // 设置界面显示信息
+        // 设置界面显示信息（宽高）
         ui->lineEdit_width->setText(QString::number(width));
         ui->lineEdit_height->setText(QString::number(height));
-        // TODO: 转为cvMat执行cv操作
+        ui->label_scale_width->setText(QString::number(width));
+        ui->label_scale_height->setText(QString::number(height));
+        // 转为cvMat执行cv操作
         img_mat_root = qImageToCVMat(qImg);
     }
     // 显示
@@ -129,11 +156,21 @@ void Widget::on_pushButton_chooseImg_clicked()
     ui->pushButton_save->setDisabled(false);
     ui->pushButton_threshold->setDisabled(false);
     ui->pushButton_labelImg_gray8->setDisabled(false);
-
+    // 亮度对比度
     ui->spinBox_brightness->setDisabled(false);
     ui->doubleSpinBox_contrast->setDisabled(false);
     ui->horizontalSlider_brightness->setDisabled(false);
     ui->horizontalSlider_contrast->setDisabled(false);
+    // 分辨率缩放
+    ui->doubleSpinBox_resize->setDisabled(false);
+    ui->pushButton_nearest->setDisabled(false);
+    ui->pushButton_linear->setDisabled(false);
+    ui->pushButton_pyramid->setDisabled(false);
+    // 图片融合
+    ui->doubleSpinBox_blend_alpha->setDisabled(false);
+    ui->spinBox_blend_gain->setDisabled(false);
+    ui->pushButton_choose_blend_img->setDisabled(false);
+    ui->pushButton_blend->setDisabled(false);
 }
 
 
@@ -510,10 +547,14 @@ void Widget::cvLine(cv::Point pt1, cv::Point pt2, double &distance){
         4
         );
 }
-
+/* 复位 */
 void Widget::on_pushButton_reset_clicked()
 {
     ui->label->resetPos(QPoint(0, 0));
+    ui->spinBox_brightness->setValue(0);
+    ui->doubleSpinBox_contrast->setValue(1);
+    ui->doubleSpinBox_resize->setValue(1);
+    ui->doubleSpinBox_blend_alpha->setValue(0.5);
 }
 
 
@@ -602,5 +643,186 @@ void Widget::on_horizontalSlider_contrast_valueChanged(int value)
     ui->doubleSpinBox_contrast->setValue(con);
     int b = ui->spinBox_brightness->value();
     changeGain(con, b);
+}
+
+
+void Widget::on_pushButton_nearest_clicked()
+{
+    // 缩放倍数
+    double scale = ui->doubleSpinBox_resize->value();
+    cv::Mat scaleMat;
+    cv::Size scaleSize(width * scale, height * scale);
+    // cv::resize -- cv::INTER_NEAREST近邻算法填充像素值（附近的像素按原本位置的像素填充）
+    cv::resize(img_mat_root, scaleMat, scaleSize, 0, 0, cv::INTER_NEAREST);
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(scaleMat)));
+    ui->label_scale_width->setText(QString::number(scaleSize.width));
+    ui->label_scale_height->setText(QString::number(scaleSize.height));
+}
+
+
+void Widget::on_pushButton_linear_clicked()
+{
+    /*  滤波
+     *  根据输入图像中像素的小邻域来产生输出图像的方法，在信号处理中这种方法称为滤波（filtering）。
+     *  其中最常用的是线性滤波：输出像素是输入邻域像素的加权和
+     * */
+
+    // 双线性内插值 -- 由原图像位置在它附近的2*2区域4个临近像素的值通过加权平均计算得出
+    // 低通滤波性质，使高频分量受损，图像领域则是图像轮廓产生模糊
+    // 性能消耗更大
+    // 缩放倍数
+    double scale = ui->doubleSpinBox_resize->value();
+    cv::Mat scaleMat;
+    cv::Size scaleSize(width * scale, height * scale);
+    // cv::resize  -- 双线性内插值-cv::INTER_LINEAR -- 是resize默认算法 resize(mat, outputMat, scaleSize);
+    cv::resize(img_mat_root, scaleMat, scaleSize, 0, 0, cv::INTER_LINEAR);
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(scaleMat)));
+    ui->label_scale_width->setText(QString::number(scaleSize.width));
+    ui->label_scale_height->setText(QString::number(scaleSize.height));
+}
+
+
+void Widget::on_pushButton_pyramid_clicked()
+{
+    int pyramidType = ui->comboBox_pyramid_type->currentIndex();
+    double scale = ui->doubleSpinBox_resize->value();
+
+    cv::Mat pyMat = img_mat_root.clone();
+    if(pyramidType == 0){
+        // 高斯金字塔缩小  缩小倍数必须是2的n次方分之1，即0.5,0,25等
+        if(scale != 0.5 && scale != 0.25){
+            QMessageBox::warning(nullptr, "高斯金字塔缩小", "缩小倍数必须是2的n次方分之1，即0.5,0,25等");
+            return;
+        }
+        ui->label_scale_width->setText(QString::number(width * scale));
+        ui->label_scale_height->setText(QString::number(height * scale));
+        while(scale <= 0.5){
+            // 高斯金字塔 执行一次缩小两倍
+            cv::pyrDown(pyMat, pyMat);
+            scale *= 2;
+        }
+    }else {
+        int py_scale = static_cast<int>(scale);
+        // 拉普拉斯金字塔放大  放大倍数必须是2的整数倍
+        if(py_scale % 2 != 0){
+            QMessageBox::warning(nullptr, "拉普拉斯金字塔放大", "放大倍数必须是2的整数倍");
+            return;
+        }
+        ui->doubleSpinBox_resize->setValue(py_scale);
+        ui->label_scale_width->setText(QString::number(width * py_scale));
+        ui->label_scale_height->setText(QString::number(height * py_scale));
+        while(py_scale > 1){
+            // 拉普拉斯金字塔 执行一次放大两倍
+            cv::pyrUp(pyMat, pyMat);
+            py_scale /= 2;
+        }
+    }
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(pyMat)));
+}
+
+/* 选择融合图片 */
+void Widget::on_pushButton_choose_blend_img_clicked()
+{
+    int maxSize = ui->label_blend_img->width();
+    QString path = QFileDialog::getOpenFileName(this,
+                                                "请选择图片",
+                                                "",
+                                                "Images (*.raw;*.png;*.jpg);");
+    if(path.isEmpty()) return;
+    blendImg = QImage(path);
+    if(blendImg.isNull()){
+        QMessageBox::warning(nullptr, "读取图片错误", "读取图片错误，请重试...");
+        return;
+    }
+    // 显示缩略图
+    // 保持宽高比缩放
+    QSize scaledSize = blendImg.size().scaled(
+        maxSize, maxSize, Qt::KeepAspectRatio
+        );
+    // 缩放图片
+    QImage scaleImg = blendImg.scaled(scaledSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    ui->label_blend_img->setPixmap(QPixmap::fromImage(scaleImg));
+}
+
+/* 融合 */
+void Widget::on_pushButton_blend_clicked()
+{
+    double alpha = ui->doubleSpinBox_blend_alpha->value();
+    double gain = ui->spinBox_blend_gain->value();
+    cv::Mat blendMat = qImageToCVMat(blendImg);
+    // 大小改为一样再融合
+    cv::resize(blendMat, blendMat, img_mat_root.size());
+    // qDebug() << "type : " << blendMat.type() << "--" << img_mat_root.type();
+    // qDebug() << "channel : " << blendMat.channels() << "--" << img_mat_root.channels();
+    // qDebug() << "depth : " << blendMat.depth() << "--" << img_mat_root.depth();
+    // 类型统一处理
+    if (blendMat.type() != img_mat_root.type()) {
+        // 处理通道差异
+        if (blendMat.channels() != img_mat_root.channels()) {
+            if (blendMat.channels() == 1) {
+                cv::cvtColor(blendMat, blendMat, cv::COLOR_GRAY2BGR); // 单通道转三通道
+            } else {
+                cv::cvtColor(blendMat, blendMat, cv::COLOR_BGR2GRAY); // 多通道转单通道示例
+            }
+        }
+
+        // 处理位深差异
+        if (blendMat.depth() != img_mat_root.depth()) {
+            if (blendMat.depth() == CV_32F) { // 浮点转8位
+                blendMat.convertTo(blendMat, CV_8UC3, 255.0); // 假设原数据范围0~1
+            } else if (blendMat.depth() == CV_16U) { // 16位转8位
+                blendMat.convertTo(blendMat, CV_8UC3, 1.0/256.0);
+            }
+        }
+    }
+    cv::Mat res_mat;
+    // 保证类型一致再进行融合
+    cv::addWeighted(blendMat, alpha, img_mat_root, 1 - alpha, gain, res_mat);
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(res_mat)));
+}
+
+/* 旋转 */
+void Widget::on_pushButton_rotate_clicked()
+{
+    int flag = ui->comboBox_rotate->currentIndex();
+    int type = 0;
+    switch(flag){
+    case 0:
+        type = cv::ROTATE_90_CLOCKWISE;         // 顺指针90
+        break;
+    case 1:
+        type = cv::ROTATE_90_COUNTERCLOCKWISE;  // 逆时针90
+        break;
+    case 2:
+        type = cv::ROTATE_180;                  // 旋转180
+        break;
+    default:
+        break;
+    }
+
+    cv::rotate(img_mat_root, img_mat_root, type);
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(img_mat_root)));
+}
+
+/* 镜像 */
+void Widget::on_pushButton_flip_clicked()
+{
+    int flag = ui->comboBox_flip->currentIndex();
+    int type = 0;
+    switch(flag){
+    case 0:
+        type = 1;   // 水平翻转
+        break;
+    case 1:
+        type = 0;   // 垂直翻转
+        break;
+    case 2:
+        type = -1;  // 同时翻转
+        break;
+    default:
+        break;
+    }
+    cv::flip(img_mat_root, img_mat_root, type);
+    ui->label->setPixmap(QPixmap::fromImage(cvMatToQImage(img_mat_root)));
 }
 
